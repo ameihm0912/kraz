@@ -81,5 +81,14 @@ func (t *ticker) getName() string {
 }
 
 func (t *ticker) shouldRun() bool {
-	return time.Now().After(t.lastRun.Add(t.interval))
+	tm := time.Now()
+
+	if tm.Weekday() == 0 || tm.Weekday() == 6 {
+		return false
+	}
+	if tm.UTC().Hour() < 13 || tm.UTC().Hour() > 21 {
+		return false
+	}
+
+	return tm.After(t.lastRun.Add(t.interval))
 }
