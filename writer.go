@@ -44,6 +44,12 @@ func (w *writer) execute(r *kruntime) error {
 	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(parts), func(i, j int) { parts[i], parts[j] = parts[j], parts[i] })
 
+	val := rand.Intn(10)
+	if val > 0 {
+		logger.Printf("writer skipping, %v != 0", val)
+		return nil
+	}
+
 	for _, x := range parts {
 		val := string(x)
 		if val == "" {
