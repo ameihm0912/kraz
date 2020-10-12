@@ -87,6 +87,7 @@ func irc_handler(wg *sync.WaitGroup) {
 
 			// Notify entry we are ready and nothing remains in the channels
 			logger.Print("irc_handler: ready for new connections")
+			time.Sleep(time.Second * 30) // Wait 30 seconds before the signal
 			runtime.ircreset <- true
 		}
 
