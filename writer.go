@@ -49,15 +49,19 @@ func (w *writer) execute(r *kruntime) error {
 		if val == "" {
 			continue
 		}
-		p := rand.Intn(3)
-		if p == 0 {
+		p := rand.Intn(5)
+		if p == 0 && len(val) <= 6 {
 			for _, y := range val {
 				r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :%v", w.channel, string(y)))
 			}
 		} else {
+			b := rand.Intn(6) == 0
 			msg := string(val[0])
 			for _, y := range val[1:] {
 				msg += " " + string(y)
+			}
+			if b {
+				msg = "" + msg + ""
 			}
 			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :%v", w.channel, msg))
 		}
