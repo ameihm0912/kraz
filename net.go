@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"sync"
+	"time"
 )
 
 func net_connect(servers []string, verify bool) (*tls.Conn, error) {
@@ -87,14 +88,18 @@ func net_writer(wg *sync.WaitGroup, conn *tls.Conn) {
 		wg.Done()
 	}()
 
+	var lastWrite time.Time
 	for {
 		select {
 		case buf := <-runtime.ircout:
 			logger.Printf("net_writer: server: %v", string(buf))
+			if !lastWrite.IsZero() && time.Now().Before(lastWrite.Add(1*time.Second)) {
+				time.Sleep(1 * time.Second)
+			}
+			lastWrite = time.Now()
 			_, err := conn.Write(append(buf, []byte{'\r', '\n'}...))
 			if err != nil {
 				logger.Printf("write error: %v", err)
-				return
 			}
 		case <-runtime.net_writer_exit:
 			logger.Print("net_writer got signal to exit")
