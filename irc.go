@@ -132,6 +132,23 @@ func irc_periodic() {
 	}
 }
 
+func irc_command(src sourceDescriptor, args []string) {
+	if !strings.HasPrefix(args[2], "#") {
+		return
+	}
+
+	cmd := args[3][1:]
+	logger.Printf("processing command %v", cmd)
+
+	for i := range runtime.modules {
+		m := runtime.modules[i]
+		if m.handlesCommand(cmd) {
+			logger.Printf("dispatching %v command to %v module", cmd, m.getName())
+			m.handleCommand(src, cmd, args, &runtime)
+		}
+	}
+}
+
 func irc_handle_join(src sourceDescriptor, args []string) {
 	if len(args) < 3 {
 		return
@@ -163,7 +180,6 @@ func irc_handle_privmsg(src sourceDescriptor, args []string) {
 	if len(args) < 4 {
 		return
 	}
-	//recip := args[2]
 
 	if args[3] == ":PING" {
 		resp := strings.Join(args[3:], " ")
@@ -172,6 +188,8 @@ func irc_handle_privmsg(src sourceDescriptor, args []string) {
 	} else if args[3] == ":VERSION" {
 		runtime.ircout <- []byte(fmt.Sprintf("NOTICE %v "+
 			":VERSION kraz %v", src.nick, version))
+	} else if strings.HasPrefix(args[3], ":&") {
+		irc_command(src, args)
 	}
 }
 

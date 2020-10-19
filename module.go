@@ -9,6 +9,8 @@ type module interface {
 	shouldRun() bool
 	execute(*kruntime) error
 	initialize()
+	handlesCommand(string) bool
+	handleCommand(sourceDescriptor, string, []string, *kruntime)
 }
 
 func moduleRegistration() error {

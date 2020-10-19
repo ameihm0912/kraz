@@ -92,3 +92,10 @@ func (t *ticker) shouldRun() bool {
 
 	return tm.After(t.lastRun.Add(t.interval))
 }
+
+func (t *ticker) handlesCommand(cmd string) bool {
+	return false
+}
+
+func (t *ticker) handleCommand(src sourceDescriptor, cmd string, args []string, r *kruntime) {
+}
