@@ -24,6 +24,7 @@ func moduleRegistration() error {
 		if err != nil {
 			return err
 		}
+		t.calc = config.Ticker.Calc
 		runtime.addModule(&t)
 	}
 

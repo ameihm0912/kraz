@@ -9,6 +9,7 @@ type tickerCfg struct {
 	Symbols  []string
 	Interval string
 	Channel  string
+	Calc     string
 }
 
 type writerCfg struct {

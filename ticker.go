@@ -5,15 +5,19 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"strconv"
 	"time"
 )
 
 const urlPrefix = "https://ca.finance.yahoo.com/quote/"
 
+var calcCache float64
+
 type ticker struct {
 	symbols  []string
 	channel  string
 	interval time.Duration
+	calc     string
 
 	lastRun time.Time
 }
@@ -23,7 +27,7 @@ func (t *ticker) initialize() {
 	t.lastRun = time.Now()
 }
 
-func fetchData(symbol string, channel string) (string, error) {
+func fetchData(symbol string, t *ticker) (string, error) {
 	url := urlPrefix + symbol
 	logger.Printf("ticker requesting %v", url)
 
@@ -56,7 +60,14 @@ func fetchData(symbol string, channel string) (string, error) {
 		return "", fmt.Errorf("value change extraction failed for %v", symbol)
 	}
 
-	ret := fmt.Sprintf("PRIVMSG %v :[ticker] %v %v %v", channel, symbol, m[1], n[1])
+	if symbol == t.calc {
+		calcCache, err = strconv.ParseFloat(m[1], 64)
+		if err != nil {
+			logger.Printf("ticker error in calc float conversion, %v", err)
+		}
+	}
+
+	ret := fmt.Sprintf("PRIVMSG %v :[ticker] %v %v %v", t.channel, symbol, m[1], n[1])
 	return ret, nil
 }
 
@@ -65,7 +76,7 @@ func (t *ticker) execute(r *kruntime) error {
 	logger.Print("ticker module executing")
 
 	for _, x := range t.symbols {
-		buf, err := fetchData(x, t.channel)
+		buf, err := fetchData(x, t)
 		if err != nil {
 			logger.Printf("ticker error in fetch data: %v", err)
 			continue
@@ -94,8 +105,18 @@ func (t *ticker) shouldRun() bool {
 }
 
 func (t *ticker) handlesCommand(cmd string) bool {
-	return false
+	return cmd == "&calc"
 }
 
 func (t *ticker) handleCommand(src sourceDescriptor, cmd string, args []string, r *kruntime) {
+	if t.calc == "" || len(args) < 5 {
+		return
+	}
+	v, err := strconv.Atoi(args[4])
+	if err != nil || v <= 0 {
+		return
+	}
+	rv := float64(v) * calcCache
+	r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[ticker] calc %v %v == $%.2f",
+		t.channel, t.calc, args[4], rv))
 }
