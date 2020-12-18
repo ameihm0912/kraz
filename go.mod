@@ -1,5 +1,8 @@
 module github.com/ameihm0912/kraz
 
-go 1.15
+go 1.14
 
-require gopkg.in/yaml.v2 v2.3.0
+require (
+	github.com/dustin/go-humanize v1.0.0
+	gopkg.in/yaml.v2 v2.3.0
+)

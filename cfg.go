@@ -3,13 +3,23 @@ package main
 import (
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"time"
 )
 
+type httpCfg struct {
+	UserAgent string
+}
+
 type tickerCfg struct {
-	Symbols  []string
-	Interval string
-	Channel  string
-	Calc     string
+	Source           string
+	Symbols          []string
+	Interval         string
+	Channel          string
+	Calc             string
+	ExecuteOnJoin    bool
+	ExcludeDays      []time.Weekday
+	ScheduleUTCStart int
+	ScheduleUTCStop  int
 }
 
 type writerCfg struct {
@@ -26,6 +36,7 @@ type cfg struct {
 	SaslUser     string
 	SaslPassword string
 
+	HTTP   httpCfg
 	Ticker tickerCfg
 	Writer writerCfg
 }

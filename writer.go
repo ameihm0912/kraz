@@ -41,7 +41,7 @@ func (w *writer) handleCommand(src sourceDescriptor, cmd string, args []string, 
 	if len(args) >= 5 {
 		if args[4] == "list" {
 			buf := strings.Join(list, " ")
-			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :writer: available: %v", target, buf))
+			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :available: %v", target, buf))
 		} else {
 			found := false
 			for _, x := range list {

@@ -5,33 +5,51 @@ import (
 	"io/ioutil"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/dustin/go-humanize"
 )
 
-const urlPrefix = "https://ca.finance.yahoo.com/quote/"
-
+var dataCache map[string]string
+var priceCache map[string]float64
 var calcCache float64
+var unitReplacer = strings.NewReplacer(",", "", "k", "000", "K", "000", "m", "000000", "M", "000000")
 
 type ticker struct {
 	symbols  []string
 	channel  string
 	interval time.Duration
-	calc     string
 
 	lastRun time.Time
 }
 
+type krazroundtripper struct {
+	rt http.RoundTripper
+}
+
 func (t *ticker) initialize() {
 	logger.Print("ticker initializing")
+	dataCache = make(map[string]string)
+	priceCache = make(map[string]float64)
 	t.lastRun = time.Now()
 }
 
-func fetchData(symbol string, t *ticker) (string, error) {
-	url := urlPrefix + symbol
-	logger.Printf("ticker requesting %v", url)
+func (krt krazroundtripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	logger.Printf("ticker setting user agent to: %v", config.HTTP.UserAgent)
+	req.Header.Add("User-Agent", config.HTTP.UserAgent)
+	return krt.rt.RoundTrip(req)
+}
 
-	r, err := http.Get(url)
+func fetchData(symbol string, t *ticker) (string, error) {
+	url := fmt.Sprintf(config.Ticker.Source, symbol)
+	logger.Printf("ticker requesting %v", url)
+	httpClient := &http.Client{
+		Transport: krazroundtripper{rt: http.DefaultTransport},
+	}
+	r, err := httpClient.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -60,14 +78,16 @@ func fetchData(symbol string, t *ticker) (string, error) {
 		return "", fmt.Errorf("value change extraction failed for %v", symbol)
 	}
 
-	if symbol == t.calc {
-		calcCache, err = strconv.ParseFloat(m[1], 64)
-		if err != nil {
-			logger.Printf("ticker error in calc float conversion, %v", err)
-		}
+	calcCache, err = strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		logger.Printf("ticker error in calc float conversion, %v", err)
 	}
+	priceCache[strings.ToUpper(symbol)] = calcCache
 
 	ret := fmt.Sprintf("PRIVMSG %v :[ticker] %v %v %v", t.channel, symbol, m[1], n[1])
+
+	dataCache[strings.ToUpper(symbol)] = ret
+
 	return ret, nil
 }
 
@@ -76,12 +96,12 @@ func (t *ticker) execute(r *kruntime) error {
 	logger.Print("ticker module executing")
 
 	for _, x := range t.symbols {
-		buf, err := fetchData(x, t)
+		_, err := fetchData(x, t)
 		if err != nil {
 			logger.Printf("ticker error in fetch data: %v", err)
 			continue
 		}
-		r.ircout <- []byte(buf)
+		r.ircout <- []byte(dataCache[x])
 	}
 
 	return nil
@@ -94,10 +114,17 @@ func (t *ticker) getName() string {
 func (t *ticker) shouldRun() bool {
 	tm := time.Now()
 
-	if tm.Weekday() == 0 || tm.Weekday() == 6 {
-		return false
+	// Update the symbol prices so we don't have to wait for the interval to trigger
+	if calcCache <= 0 && config.Ticker.ExecuteOnJoin {
+		return true
 	}
-	if tm.UTC().Hour() < 13 || tm.UTC().Hour() > 21 {
+
+	for _, x := range config.Ticker.ExcludeDays {
+		if tm.Weekday() == x {
+			return false
+		}
+	}
+	if tm.UTC().Hour() < config.Ticker.ScheduleUTCStart || tm.UTC().Hour() > config.Ticker.ScheduleUTCStop {
 		return false
 	}
 
@@ -105,18 +132,61 @@ func (t *ticker) shouldRun() bool {
 }
 
 func (t *ticker) handlesCommand(cmd string) bool {
-	return cmd == "&calc"
+	return cmd == "&calc" || cmd == "&ticker"
 }
 
 func (t *ticker) handleCommand(src sourceDescriptor, cmd string, args []string, r *kruntime) {
-	if t.calc == "" || len(args) < 5 {
-		return
+	switch cmd {
+	case "&ticker":
+		if len(args) < 5 {
+			cachedSymbols := []string{}
+			for symbol := range dataCache {
+				cachedSymbols = append(cachedSymbols, symbol)
+			}
+			sort.Strings(cachedSymbols)
+			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[ticker] available symbols: %v", t.channel, strings.Join(cachedSymbols, " ")))
+			return
+		}
+
+		symbol := strings.ToUpper(args[4])
+		logger.Printf("ticker module loading cached data for %v", symbol)
+		r.ircout <- []byte(dataCache[symbol])
+	case "&calc":
+		if len(args) < 5 {
+			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[calc] usage: &calc <symbol> [share count]", t.channel))
+			return
+		}
+
+		symbol := strings.ToUpper(args[4])
+
+		if _, ok := priceCache[symbol]; !ok {
+			cachedSymbols := []string{}
+			for symbol := range priceCache {
+				cachedSymbols = append(cachedSymbols, symbol)
+			}
+			sort.Strings(cachedSymbols)
+			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[calc] available symbols: %v", t.channel, strings.Join(cachedSymbols, " ")))
+			return
+		}
+
+		if len(args) < 6 {
+			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[calc] usage: &calc %v [share count]", t.channel, symbol))
+			return
+		}
+
+		logger.Printf("ticker module loading cached price for %v", symbol)
+		if priceCache[symbol] <= 0 {
+			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[calc] %v unavailable; pending ticker update",
+				t.channel, symbol))
+			return
+		}
+
+		v, err := strconv.Atoi(unitReplacer.Replace(args[5]))
+		if err != nil || v <= 0 {
+			return
+		}
+		rv := float64(v) * priceCache[symbol]
+		r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[calc] %v %v x $%v = $%v",
+			t.channel, symbol, humanize.Comma(int64(v)), humanize.FormatFloat("#,###.####", priceCache[symbol]), humanize.FormatFloat("#,###.##", rv)))
 	}
-	v, err := strconv.Atoi(args[4])
-	if err != nil || v <= 0 {
-		return
-	}
-	rv := float64(v) * calcCache
-	r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :[ticker] calc %v %v == $%.2f",
-		t.channel, t.calc, args[4], rv))
 }
