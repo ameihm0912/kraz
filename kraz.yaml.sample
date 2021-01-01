@@ -1,0 +1,23 @@
+---
+nick: test
+servers:
+  - 127.0.0.1:6697
+#verifycert: false
+channels:
+  - "#test"
+# sasluser: "user"
+# saslpassword: "password"
+#http:
+#  useragent: "kraz"
+#ticker:
+  #symbols:
+    #- MSFT
+  #interval: 30m
+  #scheduleutcstarthour: 11
+  #scheduleutcstophour: 22
+  #channel: "#test"
+  #executeonjoin: true
+#writer:
+  #channel: "#test"
+  #datapath: /home/user/path
+  #interval: 0s

@@ -102,6 +102,24 @@ func irc_handler(wg *sync.WaitGroup) {
 	}
 }
 
+func irc_runmodules(isOnJoin bool, channel string) {
+	for i := range runtime.modules {
+		m := runtime.modules[i]
+
+		if isOnJoin && !m.shouldRunOnJoin(channel) {
+			continue
+		}
+		if !m.shouldRun() {
+			continue
+		}
+
+		err := m.execute(&runtime)
+		if err != nil {
+			logger.Printf("error in module %v: %v", m.getName(), err)
+		}
+	}
+}
+
 func irc_periodic() {
 	if !runtime.registered {
 		return
@@ -120,16 +138,7 @@ func irc_periodic() {
 		}
 	}
 
-	for i := range runtime.modules {
-		m := runtime.modules[i]
-		if !m.shouldRun() {
-			continue
-		}
-		err := m.execute(&runtime)
-		if err != nil {
-			logger.Printf("error in module %v: %v", m.getName(), err)
-		}
-	}
+	irc_runmodules(false, "")
 }
 
 func irc_command(src sourceDescriptor, args []string) {
@@ -161,6 +170,9 @@ func irc_handle_join(src sourceDescriptor, args []string) {
 		logger.Printf("marking %v as joined", channame)
 		runtime.markChannelJoined(channame, true)
 	}
+
+	// Run any modules configured to execute on join
+	irc_runmodules(true, channame)
 }
 
 func irc_handle_kick(src sourceDescriptor, args []string) {

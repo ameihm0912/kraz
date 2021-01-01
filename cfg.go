@@ -3,7 +3,6 @@ package main
 import (
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
-	"time"
 )
 
 type httpCfg struct {
@@ -11,15 +10,13 @@ type httpCfg struct {
 }
 
 type tickerCfg struct {
-	Source           string
-	Symbols          []string
-	Interval         string
-	Channel          string
-	Calc             string
-	ExecuteOnJoin    bool
-	ExcludeDays      []time.Weekday
-	ScheduleUTCStart int
-	ScheduleUTCStop  int
+	Symbols              []string
+	Interval             string
+	Channel              string
+	Calc                 string
+	ExecuteOnJoin        bool
+	ScheduleUTCStartHour int
+	ScheduleUTCStopHour  int
 }
 
 type writerCfg struct {
@@ -36,7 +33,7 @@ type cfg struct {
 	SaslUser     string
 	SaslPassword string
 
-	HTTP   httpCfg
+	Http   httpCfg
 	Ticker tickerCfg
 	Writer writerCfg
 }
@@ -56,6 +53,13 @@ func loadCfg(confpath string) (*cfg, error) {
 	err = yaml.Unmarshal(buf, &ret)
 	if err != nil {
 		return nil, err
+	}
+
+	if ret.Ticker.ScheduleUTCStartHour == 0 {
+		ret.Ticker.ScheduleUTCStartHour = 13
+	}
+	if ret.Ticker.ScheduleUTCStopHour == 0 {
+		ret.Ticker.ScheduleUTCStopHour = 21
 	}
 
 	return &ret, ret.validate()

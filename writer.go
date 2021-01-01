@@ -25,6 +25,10 @@ func (w *writer) shouldRun() bool {
 	return w.interval.Seconds() != 0 && time.Now().After(w.lastRun.Add(w.interval))
 }
 
+func (w *writer) shouldRunOnJoin(channel string) bool {
+	return false
+}
+
 func (w *writer) handlesCommand(cmd string) bool {
 	return cmd == "&w"
 }
@@ -41,7 +45,7 @@ func (w *writer) handleCommand(src sourceDescriptor, cmd string, args []string, 
 	if len(args) >= 5 {
 		if args[4] == "list" {
 			buf := strings.Join(list, " ")
-			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :available: %v", target, buf))
+			r.ircout <- []byte(fmt.Sprintf("PRIVMSG %v :writer: available: %v", target, buf))
 		} else {
 			found := false
 			for _, x := range list {

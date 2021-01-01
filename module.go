@@ -7,6 +7,7 @@ import (
 type module interface {
 	getName() string
 	shouldRun() bool
+	shouldRunOnJoin(string) bool
 	execute(*kruntime) error
 	initialize()
 	handlesCommand(string) bool
@@ -24,6 +25,7 @@ func moduleRegistration() error {
 		if err != nil {
 			return err
 		}
+		t.executeOnJoin = config.Ticker.ExecuteOnJoin
 		runtime.addModule(&t)
 	}
 
